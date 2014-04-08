@@ -1,10 +1,18 @@
 #!/usr/bin/python
 import subprocess, dbus,os, time,re
+from Xlib.display import Display
+from Xlib import X, error
+from ConfigParser import SafeConfigParser
 class MovieMode:
 	def __init__(self):
 		self.sleepIsPrevented = False
 		self.redshiftIsKilled = False
-		self.matches = ['pipelight-silverlight', 'vlc']
+		parser = SafeConfigParser()
+		parser.read('config.cfg')
+		self.matches = [w.strip() for w in parser.get('applications','process_identifiers').split(',')]
+		self.windows = [w.strip() for w in parser.get('applications', 'window_identifiers').split(',')]
+		self.colorApp = parser.get('other', 'screen_colorization_application').strip()
+		self.refreshRate = int(parser.get('other', 'refresh_rate').strip())
 	def processesRunning(self):
 		p = subprocess.Popen('ps -ef', shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
 		for line in p.stdout.readlines():
@@ -34,26 +42,56 @@ class MovieMode:
 		else:
 			p = subprocess.Popen('ps -ef', shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
 			for line in p.stdout.readlines():
-				if "redshift" in line:
-					print("matched redshift on line " + line)
+				if self.colorApp in line:
+					print("matched " + self.colorApp + " on line " + line)
 					matches = re.findall(r"\d{2,}",line)
 					if matches:
 						# kill the pid of redshift
-						print("killing redshift on pid " + matches[0])
+						print("killing " + self.colorApp + " on pid " + matches[0])
 						subprocess.Popen('kill ' + matches[0], shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
 						self.redshiftIsKilled = True
 						break
-
+					else:
+						print("Could not find PID for colorization application")
+	def checkXSession(self):
+		try:
+			self.display.no_operation()
+			self.display.sync()
+		except error.ConnectionClosedError:
+			return False
+		return True
+	def getActiveWindow(self):
+		#If no xsession we return None
+		if self.checkXSession() == None:
+			return None
+		ret = self.root.get_full_property(self.display.intern_atom('_NET_ACTIVE_WINDOW'), X.AnyPropertyType)
+		if ret is not None:
+			windowID = ret.value[0]
+			if windowID != 0:
+				window = self.display.create_resource_object('window', windowID)
+				title = window.get_wm_name()
+				winclass = window.get_wm_class()
+				print 'Active Window: ', winclass
+				return winclass
+		else:
+			print("No active window")
+			return None
 	def start(self):
+		self.display = Display()
+		self.root = self.display.screen().root
 		disabled = False
 		while(True):
+			window = self.getActiveWindow()
+			matchedWindow = any(w in window for w in self.windows)
 			isRunning = self.processesRunning()
-			if isRunning and not disabled or not isRunning and disabled:
+			if matchedWindow and isRunning and not disabled or not matchedWindow and disabled:
 				self.toggleScreenSaver()
 				self.toggleRedshift()
 				disabled = not disabled
+			else:
+				print("Active windows does not match any defined programs")
 			print("Sleeping...")
-			time.sleep(30)
+			time.sleep(self.refreshRate)
 
 if __name__ == "__main__":
 		m = MovieMode()
