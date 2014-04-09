@@ -1,25 +1,31 @@
 #!/usr/bin/python
-import subprocess, dbus,os, time,re
+
+# MovieMode.py
+# Inhibits screensaver and kills screen colorization application like redshift when the active window
+# has a certain name, perfect for watching movies or playing games. When application window no longer
+# is the active screensaver and colorization application are restorned to normal.
+# Program prints active window in console so it's easy to see what to put in config file
+# Author: Kim
+
+import subprocess
+import dbus
+import os
+import time
+import re
+
 from Xlib.display import Display
 from Xlib import X, error
 from ConfigParser import SafeConfigParser
+
 class MovieMode:
 	def __init__(self):
 		self.sleepIsPrevented = False
 		self.redshiftIsKilled = False
 		parser = SafeConfigParser()
 		parser.read('config.cfg')
-		self.matches = [w.strip() for w in parser.get('applications','process_identifiers').split(',')]
 		self.windows = [w.strip() for w in parser.get('applications', 'window_identifiers').split(',')]
 		self.colorApp = parser.get('other', 'screen_colorization_application').strip()
 		self.refreshRate = int(parser.get('other', 'refresh_rate').strip())
-	def processesRunning(self):
-		p = subprocess.Popen('ps -ef', shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-		for line in p.stdout.readlines():
-			if any(m in line for m in self.matches):
-				print "Matched line: " + line
-				return True
-		return False
 
 	def toggleScreenSaver(self):
 		bus = dbus.SessionBus()
@@ -53,6 +59,7 @@ class MovieMode:
 						break
 					else:
 						print("Could not find PID for colorization application")
+
 	def checkXSession(self):
 		try:
 			self.display.no_operation()
@@ -76,6 +83,8 @@ class MovieMode:
 		else:
 			print("No active window")
 			return None
+
+	# Checks every X seconds if active window is any of the specified windows
 	def start(self):
 		self.display = Display()
 		self.root = self.display.screen().root
@@ -83,13 +92,12 @@ class MovieMode:
 		while(True):
 			window = self.getActiveWindow()
 			matchedWindow = any(w in window for w in self.windows)
-			isRunning = self.processesRunning()
-			if matchedWindow and isRunning and not disabled or not matchedWindow and disabled:
+			if matchedWindow and not disabled or not matchedWindow and disabled:
 				self.toggleScreenSaver()
 				self.toggleRedshift()
 				disabled = not disabled
 			else:
-				print("Active windows does not match any defined programs")
+				print("Do nothing")
 			print("Sleeping...")
 			time.sleep(self.refreshRate)
 
