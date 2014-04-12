@@ -76,10 +76,9 @@ class MovieMode:
 			windowID = ret.value[0]
 			if windowID != 0:
 				window = self.display.create_resource_object('window', windowID)
-				title = window.get_wm_name()
 				winclass = window.get_wm_class()
-				print 'Active Window: ', winclass
-				return winclass
+				print 'Active Window: ', winclass[1]
+				return winclass[1]
 		else:
 			print("No active window")
 			return None
