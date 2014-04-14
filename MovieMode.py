@@ -24,7 +24,6 @@ class MovieMode:
 		parser = SafeConfigParser()
 		parser.read('config.cfg')
 		self.windows = [w.strip() for w in parser.get('applications', 'window_identifiers').split(',')]
-		self.colorApp = parser.get('other', 'screen_colorization_application').strip()
 		self.refreshRate = int(parser.get('other', 'refresh_rate').strip())
 
 	def toggleScreenSaver(self):
@@ -41,24 +40,8 @@ class MovieMode:
 		self.sleepIsPrevented = not self.sleepIsPrevented
 
 	def toggleRedshift(self):
-		if self.redshiftIsKilled:
-			print("Restarting redshift")
-			subprocess.Popen('redshift &', shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-			self.redshiftIsKilled = False
-		else:
-			p = subprocess.Popen('ps -ef', shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-			for line in p.stdout.readlines():
-				if self.colorApp in line:
-					print("matched " + self.colorApp + " on line " + line)
-					matches = re.findall(r"\d{2,}",line)
-					if matches:
-						# kill the pid of redshift
-						print("killing " + self.colorApp + " on pid " + matches[0])
-						subprocess.Popen('kill ' + matches[0], shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-						self.redshiftIsKilled = True
-						break
-					else:
-						print("Could not find PID for colorization application")
+		print("Toggle redshift")
+		subprocess.Popen('pkill -USR1 redshift', shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
 
 	def checkXSession(self):
 		try:
@@ -90,13 +73,14 @@ class MovieMode:
 		disabled = False
 		while(True):
 			window = self.getActiveWindow()
-			matchedWindow = any(w in window for w in self.windows)
-			if matchedWindow and not disabled or not matchedWindow and disabled:
-				self.toggleScreenSaver()
-				self.toggleRedshift()
-				disabled = not disabled
-			else:
-				print("Do nothing")
+			if window != None:
+				matchedWindow = any(w in window for w in self.windows)
+				if matchedWindow and not disabled or not matchedWindow and disabled:
+					self.toggleScreenSaver()
+					self.toggleRedshift()
+					disabled = not disabled
+				else:
+					print("Do nothing")
 			print("Sleeping...")
 			time.sleep(self.refreshRate)
 
